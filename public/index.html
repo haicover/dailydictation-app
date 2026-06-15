@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DailyDictation Study Planner & Progress Tracker</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+    <div class="app-container">
+        <!-- Sidebar / Header -->
+        <header class="app-header">
+            <div class="logo-area">
+                <i class="bi bi-rocket-takeoff-fill logo-icon"></i>
+                <div>
+                    <h1>DailyDictation</h1>
+                    <span class="subtitle">Study Planner & Tracker</span>
+                </div>
+            </div>
+            
+            <div class="user-profile" id="user-profile-header">
+                <i class="bi bi-person-circle avatar"></i>
+                <div class="user-info">
+                    <span class="username" id="profile-name">Chưa kết nối</span>
+                    <span class="sync-status" id="sync-time">Cần đồng bộ tiến độ</span>
+                </div>
+            </div>
+
+            <div class="header-actions">
+                <button id="btn-sync-modal" class="btn btn-primary">
+                    <i class="bi bi-arrow-repeat"></i> Đồng bộ hóa
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Dashboard -->
+        <main class="dashboard-grid">
+            
+            <!-- Left Side: Config & Stats -->
+            <section class="panel-left">
+                <!-- Overview Stats -->
+                <div class="card stats-card">
+                    <h2><i class="bi bi-graph-up-arrow text-primary"></i> Tổng Quan Tiến Độ</h2>
+                    <div class="overall-progress-container">
+                        <div class="circular-progress-wrapper">
+                            <svg class="circular-progress" viewBox="0 0 100 100">
+                                <circle class="bg" cx="50" cy="50" r="45"></circle>
+                                <circle class="fg" cx="50" cy="50" r="45" id="overall-circle"></circle>
+                            </svg>
+                            <div class="progress-text">
+                                <span class="percent" id="overall-percent">0%</span>
+                                <span class="count" id="overall-count">0/0 bài</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Study Planner Settings -->
+                <div class="card planner-card">
+                    <h2><i class="bi bi-sliders text-warning"></i> Cấu Hình Mục Tiêu</h2>
+                    <div class="form-group">
+                        <label for="lessons-per-day">Mục tiêu học mỗi ngày:</label>
+                        <div class="input-number-wrapper">
+                            <input type="number" id="lessons-per-day" min="1" max="50" value="3">
+                            <span class="unit">bài / ngày</span>
+                        </div>
+                    </div>
+                    <div class="planner-metrics">
+                        <div class="metric-item">
+                            <span class="metric-label">Tổng số ngày cần học:</span>
+                            <span class="metric-value text-warning" id="days-remaining">-- ngày</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Ngày hoàn thành dự kiến:</span>
+                            <span class="metric-value text-success" id="completion-date">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Next Recommendations -->
+                <div class="card recommendation-card">
+                    <h2><i class="bi bi-compass text-info"></i> Gợi Ý Học Tiếp Theo</h2>
+                    <p class="section-desc">Hệ thống đề xuất bài học tiếp theo dựa trên lộ trình tối ưu của bạn:</p>
+                    <div class="recommendations-list" id="recommendations-list">
+                        <!-- Dynamic content here -->
+                        <div class="empty-state">
+                            <i class="bi bi-journal-check"></i>
+                            <p>Hãy đồng bộ tiến độ của bạn để nhận gợi ý học tập.</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Side: Roadmap -->
+            <section class="panel-right">
+                <div class="card roadmap-card">
+                    <div class="roadmap-header">
+                        <h2><i class="bi bi-compass-fill text-primary"></i> Bản Đồ Lộ Trình Học Tập</h2>
+                        <span class="badge" id="active-phase-badge">Chưa bắt đầu</span>
+                    </div>
+
+                    <!-- Roadmap Timeline -->
+                    <div class="roadmap-timeline">
+                        
+                        <!-- Giai đoạn 1 -->
+                        <div class="timeline-phase" id="phase-1">
+                            <div class="phase-header">
+                                <div class="phase-number">01</div>
+                                <div class="phase-info">
+                                    <h3>Giai đoạn 1: Xây Dựng Nền Tảng</h3>
+                                    <p class="phase-desc">Luyện phát âm chuẩn IPA, nghe chữ số và tên riêng. Cần thiết trước khi nghe câu dài.</p>
+                                </div>
+                                <div class="phase-progress">
+                                    <span class="phase-progress-text" id="phase-1-progress-text">0/61 bài</span>
+                                    <div class="progress-bar-mini"><div class="fill" id="phase-1-progress-fill" style="width: 0%;"></div></div>
+                                </div>
+                            </div>
+                            <div class="courses-grid" id="phase-1-courses">
+                                <!-- Dynamic courses -->
+                            </div>
+                        </div>
+
+                        <!-- Giai đoạn 2 -->
+                        <div class="timeline-phase" id="phase-2">
+                            <div class="phase-header">
+                                <div class="phase-number">02</div>
+                                <div class="phase-info">
+                                    <h3>Giai đoạn 2: Nghe Hiểu Giao Tiếp Cơ Bản</h3>
+                                    <p class="phase-desc">Làm quen với tốc độ nói của các đoạn hội thoại thường nhật và câu chuyện thiếu nhi.</p>
+                                </div>
+                                <div class="phase-progress">
+                                    <span class="phase-progress-text" id="phase-2-progress-text">0/113 bài</span>
+                                    <div class="progress-bar-mini"><div class="fill" id="phase-2-progress-fill" style="width: 0%;"></div></div>
+                                </div>
+                            </div>
+                            <div class="courses-grid" id="phase-2-courses">
+                                <!-- Dynamic courses -->
+                            </div>
+                        </div>
+
+                        <!-- Giai đoạn 3 -->
+                        <div class="timeline-phase" id="phase-3">
+                            <div class="phase-header">
+                                <div class="phase-number">03</div>
+                                <div class="phase-info">
+                                    <h3>Giai đoạn 3: Tăng Tốc & Tin Tức</h3>
+                                    <p class="phase-desc">Nghe hiểu các văn cảnh công sở, truyện ngắn mức độ trung cấp và bản tin thực tế.</p>
+                                </div>
+                                <div class="phase-progress">
+                                    <span class="phase-progress-text" id="phase-3-progress-text">0/1096 bài</span>
+                                    <div class="progress-bar-mini"><div class="fill" id="phase-3-progress-fill" style="width: 0%;"></div></div>
+                                </div>
+                            </div>
+                            <div class="courses-grid" id="phase-3-courses">
+                                <!-- Dynamic courses -->
+                            </div>
+                        </div>
+
+                        <!-- Giai đoạn 4 -->
+                        <div class="timeline-phase" id="phase-4">
+                            <div class="phase-header">
+                                <div class="phase-number">04</div>
+                                <div class="phase-info">
+                                    <h3>Giai đoạn 4: Chuyên Sâu & Học Thuật</h3>
+                                    <p class="phase-desc">Chinh phục nghe hiểu học thuật (IELTS/TOEFL), bài thuyết trình TED và tiếng Anh đời sống thực tế.</p>
+                                </div>
+                                <div class="phase-progress">
+                                    <span class="phase-progress-text" id="phase-4-progress-text">0/749 bài</span>
+                                    <div class="progress-bar-mini"><div class="fill" id="phase-4-progress-fill" style="width: 0%;"></div></div>
+                                </div>
+                            </div>
+                            <div class="courses-grid" id="phase-4-courses">
+                                <!-- Dynamic courses -->
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- Sync Modal -->
+        <div class="modal-backdrop" id="sync-modal">
+            <div class="modal">
+                <div class="modal-header">
+                    <h3><i class="bi bi-lightning-charge-fill text-warning"></i> Hướng Dẫn Đồng Bộ Tiến Độ Học Tập</h3>
+                    <button class="btn-close" id="btn-close-modal"><i class="bi bi-x-lg"></i></button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-intro">Làm theo các bước đơn giản sau để đồng bộ tiến độ học từ trang **DailyDictation** về công cụ lập kế hoạch của bạn:</p>
+                    
+                    <div class="steps-container">
+                        <div class="step-card">
+                            <div class="step-num">1</div>
+                            <div class="step-content">
+                                <h4>Cài đặt Bookmarklet</h4>
+                                <p>Nhấp chuột và kéo nút bên dưới thả vào **Thanh dấu trang (Bookmarks bar)** trên trình duyệt của bạn (hoặc nhấn Ctrl+D và paste mã vào URL):</p>
+                                <a href="" id="bookmarklet-btn" class="bookmarklet-drag-btn" onclick="return false;">
+                                    <i class="bi bi-bookmark-star-fill"></i> Kéo tôi vào Bookmarks Bar
+                                </a>
+                            </div>
+                        </div>
+                        
+                        <div class="step-card">
+                            <div class="step-num">2</div>
+                            <div class="step-content">
+                                <h4>Mở DailyDictation</h4>
+                                <p>Truy cập trang web <a href="https://dailydictation.com/exercises" target="_blank" class="link-external">dailydictation.com/exercises <i class="bi bi-box-arrow-up-right"></i></a> và đảm bảo bạn đã đăng nhập tài khoản Google của mình.</p>
+                            </div>
+                        </div>
+                        
+                        <div class="step-card">
+                            <div class="step-num">3</div>
+                            <div class="step-content">
+                                <h4>Đồng bộ trong 1-Click</h4>
+                                <p>Nhấp vào Bookmarklet vừa lưu trên thanh dấu trang. Tiến trình học sẽ tự động được gửi và đồng bộ ngay lập tức!</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="alternative-sync">
+                        <h4>Cách 2: Đồng bộ thủ công bằng File dữ liệu</h4>
+                        <p class="sub-text">Nếu Bookmarklet bị chặn bởi bảo mật hoặc không hoạt động, Bookmarklet sẽ tự động tải xuống file `dailydictation_progress.json`. Hãy tải file đó lên đây:</p>
+                        <div class="file-upload-area" id="drop-zone">
+                            <i class="bi bi-file-earmark-arrow-up upload-icon"></i>
+                            <p>Kéo và thả file `dailydictation_progress.json` vào đây hoặc</p>
+                            <label for="file-input" class="btn btn-secondary btn-sm">Chọn file từ máy tính</label>
+                            <input type="file" id="file-input" accept=".json" style="display: none;">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script -->
+    <script src="app.js"></script>
+</body>
+</html>
