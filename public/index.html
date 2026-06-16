@@ -41,6 +41,9 @@
                 <button id="btn-theme-toggle" class="btn btn-secondary" style="padding: 10px 14px;" title="Đổi giao diện Sáng/Tối">
                     <i class="bi bi-sun-fill" id="theme-icon"></i>
                 </button>
+                <button id="btn-share-modal" class="btn btn-secondary" style="padding: 10px 14px;" title="Chia sẻ thành tích">
+                    <i class="bi bi-share-fill"></i>
+                </button>
                 <button id="btn-sync-modal" class="btn btn-primary">
                     <i class="bi bi-arrow-repeat"></i> Đồng bộ hóa
                 </button>
@@ -82,18 +85,56 @@
                             <li>Chưa có hoạt động nào hôm nay. Cố lên ní!</li>
                         </ul>
                     </div>
+                    <div class="study-history-chart-container" style="margin-top: 16px; border-top: 1px dashed var(--border-color); padding-top: 16px;">
+                        <h3 style="font-size: 0.9rem; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                            <i class="bi bi-bar-chart-line text-info"></i> Lịch sử học 7 ngày qua
+                        </h3>
+                        <div class="chart-bars" id="history-chart-bars">
+                            <!-- Dynamic bars -->
+                        </div>
+                        <div class="chart-labels" id="history-chart-labels">
+                            <!-- Dynamic labels -->
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Study Planner Settings -->
                 <div class="card planner-card">
                     <h2><i class="bi bi-sliders text-warning"></i> Cấu Hình Mục Tiêu</h2>
-                    <div class="form-group">
-                        <label for="lessons-per-day">Mục tiêu học mỗi ngày:</label>
-                        <div class="input-number-wrapper">
-                            <input type="number" id="lessons-per-day" min="1" max="50" value="3">
-                            <span class="unit">bài / ngày</span>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <div class="form-group">
+                            <label for="lessons-per-day">Mỗi ngày:</label>
+                            <div class="input-number-wrapper">
+                                <input type="number" id="lessons-per-day" min="1" max="50" value="3">
+                                <span class="unit" style="right: 8px; font-size: 0.65rem;">bài/ngày</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="lessons-per-week">Mỗi tuần:</label>
+                            <div class="input-number-wrapper">
+                                <input type="number" id="lessons-per-week" min="1" max="350" value="15">
+                                <span class="unit" style="right: 8px; font-size: 0.65rem;">bài/tuần</span>
+                            </div>
                         </div>
                     </div>
+
+                    <div class="weekly-progress-container" style="border-top: 1px dashed var(--border-color); padding: 12px 0; margin-bottom: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-muted);">Mục tiêu tuần này:</span>
+                            <span id="weekly-progress-text" style="font-size: 0.75rem; font-weight: 700; color: var(--color-success);">0/15 bài</span>
+                        </div>
+                        <div class="progress-bar-mini" style="height: 6px; margin-bottom: 8px;"><div class="fill" id="weekly-progress-fill" style="width: 0%;"></div></div>
+                        <div class="weekly-days-row" id="weekly-days-row" style="display: flex; justify-content: space-between; font-size: 0.65rem; font-weight: 600; color: var(--text-dark);">
+                            <span data-day="1">T2</span>
+                            <span data-day="2">T3</span>
+                            <span data-day="3">T4</span>
+                            <span data-day="4">T5</span>
+                            <span data-day="5">T6</span>
+                            <span data-day="6">T7</span>
+                            <span data-day="0">CN</span>
+                        </div>
+                    </div>
+
                     <div class="planner-metrics">
                         <div class="metric-item">
                             <span class="metric-label">Tổng số ngày cần học:</span>
@@ -106,6 +147,36 @@
                         <div class="metric-item">
                             <span class="metric-label">Thời gian đã luyện nghe:</span>
                             <span class="metric-value text-info" id="total-study-time">--</span>
+                        </div>
+                    </div>
+
+                    <!-- Score Estimator & Study Habit -->
+                    <div class="planner-metrics" style="margin-top: 12px; border-top: 1px dashed var(--border-color); padding-top: 12px;">
+                        <div class="metric-item">
+                            <span class="metric-label">Điểm TOEIC ước tính:</span>
+                            <span class="metric-value text-warning" id="est-toeic">-- / 495 L</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Điểm IELTS ước tính:</span>
+                            <span class="metric-value text-success" id="est-ielts">-- / 9.0 L</span>
+                        </div>
+                    </div>
+                    <div id="habit-analytics-text" style="font-size: 0.72rem; color: var(--text-muted); margin-top: 10px; display: flex; align-items: center; gap: 6px; border-top: 1px dashed var(--border-color); padding-top: 8px;">
+                        <i class="bi bi-info-circle text-info"></i> Hãy học nhiều hơn để thống kê khung giờ hiệu quả nhất.
+                    </div>
+                </div>
+
+                <!-- Pomodoro Focus Timer Card -->
+                <div class="card pomodoro-card">
+                    <h2><i class="bi bi-clock-history text-danger"></i> Tập Trung Pomodoro</h2>
+                    <p class="section-desc">Giữ tập trung cao độ khi làm bài tập nghe chép chính tả:</p>
+                    <div class="pomodoro-display" style="display: flex; flex-direction: column; align-items: center; gap: 12px; margin-top: 16px;">
+                        <div id="pomodoro-time" style="font-family: var(--font-mono); font-size: 2.8rem; font-weight: 700; color: var(--text-main); letter-spacing: 2px;">25:00</div>
+                        <div id="pomodoro-status" style="font-size: 0.8rem; font-weight: 600; color: var(--color-warning);">Sẵn sàng học tập</div>
+                        <div class="pomodoro-actions" style="display: flex; gap: 8px;">
+                            <button id="btn-pomodoro-start" class="btn btn-primary btn-sm"><i class="bi bi-play-fill"></i> Bắt đầu</button>
+                            <button id="btn-pomodoro-pause" class="btn btn-secondary btn-sm" style="display: none;"><i class="bi bi-pause-fill"></i> Tạm dừng</button>
+                            <button id="btn-pomodoro-reset" class="btn btn-secondary btn-sm"><i class="bi bi-arrow-counterclockwise"></i> Reset</button>
                         </div>
                     </div>
                 </div>
@@ -231,6 +302,25 @@
                         </div>
 
                     </div>
+                    
+                    <!-- Study Heatmap Section -->
+                    <div class="heatmap-section" style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                        <h3 style="font-size: 0.95rem; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 6px;">
+                            <i class="bi bi-grid-3x3-gap text-success"></i> Nhật ký hoạt động 30 ngày qua
+                        </h3>
+                        <p class="section-desc" style="margin-bottom: 12px;">Độ đậm nhạt của ô vuông thể hiện mức độ học tập của ní:</p>
+                        <div class="heatmap-grid" id="heatmap-grid">
+                            <!-- 30 square tiles -->
+                        </div>
+                        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 6px; font-size: 0.65rem; color: var(--text-muted); max-width: 320px; margin: 0 auto;">
+                            <span>Ít</span>
+                            <div style="width: 10px; height: 10px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 2px;"></div>
+                            <div style="width: 10px; height: 10px; background: rgba(16, 185, 129, 0.2); border-radius: 2px;"></div>
+                            <div style="width: 10px; height: 10px; background: rgba(16, 185, 129, 0.5); border-radius: 2px;"></div>
+                            <div style="width: 10px; height: 10px; background: rgba(16, 185, 129, 0.9); border-radius: 2px;"></div>
+                            <span>Nhiều</span>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -311,13 +401,111 @@
                     <h3><i class="bi bi-pencil-square text-primary"></i> Ghi Chú Khóa Học: <span id="notes-modal-course-title">--</span></h3>
                     <button class="btn-close" id="btn-close-notes-modal"><i class="bi bi-x-lg"></i></button>
                 </div>
-                <div class="modal-body">
-                    <p class="modal-intro" style="margin-bottom: 12px; font-size: 0.85rem; color: var(--text-muted);">Ghi lại từ vựng khó, ngữ pháp hoặc lưu ý phát âm của bạn cho khóa học này:</p>
-                    <textarea id="notes-textarea" placeholder="Nhập ghi chú của bạn ở đây..." style="width: 100%; height: 150px; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(255, 255, 255, 0.03); color: var(--text-main); font-family: inherit; font-size: 0.9rem; resize: vertical; margin-bottom: 16px; outline: none; transition: border-color 0.2s;"></textarea>
-                    <div style="display: flex; justify-content: flex-end; gap: 8px;">
-                        <button class="btn btn-secondary btn-sm" id="btn-cancel-notes">Hủy</button>
-                        <button class="btn btn-primary btn-sm" id="btn-save-notes">Lưu ghi chú</button>
+                <div class="modal-body" style="padding-top: 12px;">
+                    <div class="modal-tabs" style="display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; gap: 12px;">
+                        <button class="tab-btn active" data-tab="tab-edit">📝 Sổ tay</button>
+                        <button class="tab-btn" data-tab="tab-dict">📖 Tra từ điển</button>
+                        <button class="tab-btn" data-tab="tab-flash">🎴 Flashcard</button>
                     </div>
+                    
+                    <!-- Tab 1: Sổ tay ghi chú -->
+                    <div class="tab-content" id="tab-edit">
+                        <p class="modal-intro" style="margin-bottom: 12px; font-size: 0.85rem; color: var(--text-muted);">Ghi lại từ vựng khó hoặc lưu ý của khóa học này (Mẹo: Ghi dạng 'từ - nghĩa' trên mỗi dòng để ôn flashcard!):</p>
+                        <textarea id="notes-textarea" placeholder="Ví dụ:&#10;exacerbate - làm trầm trọng thêm&#10;schedule - lịch trình" style="width: 100%; height: 150px; padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(255, 255, 255, 0.03); color: var(--text-main); font-family: inherit; font-size: 0.9rem; resize: vertical; margin-bottom: 16px; outline: none; transition: border-color 0.2s;"></textarea>
+                        <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                            <button class="btn btn-secondary btn-sm" id="btn-cancel-notes">Hủy</button>
+                            <button class="btn btn-primary btn-sm" id="btn-save-notes">Lưu ghi chú</button>
+                        </div>
+                    </div>
+                    
+                    <!-- Tab 2: Tra từ điển -->
+                    <div class="tab-content" id="tab-dict" style="display: none;">
+                        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                            <input type="text" id="dict-search-input" placeholder="Nhập từ tiếng Anh cần tra..." style="flex: 1; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(255, 255, 255, 0.03); color: var(--text-main); font-family: inherit; font-size: 0.9rem; outline: none;">
+                            <button class="btn btn-primary btn-sm" id="btn-dict-search" style="padding: 8px 16px;"><i class="bi bi-search"></i> Tra từ</button>
+                        </div>
+                        <div id="dict-result" style="max-height: 180px; overflow-y: auto; padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 8px; background: rgba(255, 255, 255, 0.01); font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+                            Nhập từ tiếng Anh bên trên và nhấn Tra từ để xem định nghĩa.
+                        </div>
+                    </div>
+                    
+                    <!-- Tab 3: Flashcard -->
+                    <div class="tab-content" id="tab-flash" style="display: none;">
+                        <div id="flash-card-container" style="perspective: 1000px; width: 100%; height: 160px; margin-bottom: 16px; cursor: pointer;">
+                            <div class="flash-card-inner" id="flash-card-inner" style="position: relative; width: 100%; height: 100%; text-align: center; transition: transform 0.6s; transform-style: preserve-3d;">
+                                <!-- Front Side -->
+                                <div class="flash-card-front" id="flash-card-front" style="position: absolute; width: 100%; height: 100%; backface-visibility: hidden; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-shadow: var(--card-shadow);">
+                                    <span style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 8px;">Mặt trước (Từ vựng)</span>
+                                    <h3 style="font-size: 1.4rem; color: var(--text-main);" id="flash-front-text">Từ vựng</h3>
+                                </div>
+                                <!-- Back Side -->
+                                <div class="flash-card-back" id="flash-card-back" style="position: absolute; width: 100%; height: 100%; backface-visibility: hidden; background: rgba(99, 102, 241, 0.08); border: 1px solid var(--primary-color); border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; box-shadow: var(--card-shadow); transform: rotateY(180deg);">
+                                    <span style="font-size: 0.75rem; color: var(--primary-color); margin-bottom: 8px;">Mặt sau (Giải nghĩa)</span>
+                                    <h3 style="font-size: 1.2rem; color: var(--text-main);" id="flash-back-text">Nghĩa của từ</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span id="flash-counter" style="font-size: 0.8rem; color: var(--text-muted);">0/0 thẻ</span>
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-secondary btn-sm" id="btn-flash-prev" style="padding: 6px 12px;"><i class="bi bi-chevron-left"></i> Trước</button>
+                                <button class="btn btn-secondary btn-sm" id="btn-flash-next" style="padding: 6px 12px;">Sau <i class="bi bi-chevron-right"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Share Progress Modal -->
+        <div class="modal-backdrop" id="share-modal">
+            <div class="modal" style="max-width: 420px; background: var(--bg-panel); border: 1px solid var(--border-color);">
+                <div class="modal-header">
+                    <h3><i class="bi bi-share-fill text-primary"></i> Thiệp Thành Tích Học Tập</h3>
+                    <button class="btn-close" id="btn-close-share-modal"><i class="bi bi-x-lg"></i></button>
+                </div>
+                <div class="modal-body" style="display: flex; flex-direction: column; align-items: center; gap: 16px;">
+                    <div id="share-card-canvas" style="width: 340px; background: linear-gradient(135deg, #1e1e2f 0%, #11111b 100%); border: 2px solid rgba(99, 102, 241, 0.3); border-radius: 16px; padding: 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); position: relative; overflow: hidden;">
+                        <div style="position: absolute; top: -50px; left: -50px; width: 100px; height: 100px; background: rgba(99, 102, 241, 0.15); border-radius: 50%; filter: blur(30px);"></div>
+                        <div style="position: absolute; bottom: -50px; right: -50px; width: 100px; height: 100px; background: rgba(168, 85, 247, 0.15); border-radius: 50%; filter: blur(30px);"></div>
+                        
+                        <div style="display: flex; align-items: center; gap: 8px; justify-content: center;">
+                            <i class="bi bi-rocket-takeoff-fill" style="color: var(--primary-color); font-size: 1.2rem;"></i>
+                            <span style="font-weight: 700; color: #ffffff; font-size: 0.95rem; letter-spacing: 1px; text-transform: uppercase;">DailyDictation Tracker</span>
+                        </div>
+                        
+                        <div style="margin-top: 8px;">
+                            <span style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;">Thành tích của</span>
+                            <h2 id="share-card-name" style="font-size: 1.35rem; color: #ffffff; font-weight: 700; margin-top: 2px;">Học viên</h2>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-around; width: 100%; margin: 12px 0; border-top: 1px solid rgba(255,255,255,0.06); border-bottom: 1px solid rgba(255,255,255,0.06); padding: 12px 0;">
+                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                <span style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Chuỗi Streak</span>
+                                <span style="font-size: 1.2rem; font-weight: 700; color: var(--color-danger); margin-top: 2px;"><i class="bi bi-fire"></i> <span id="share-card-streak">0</span> Ngày</span>
+                            </div>
+                            <div style="display: flex; flex-direction: column; align-items: center;">
+                                <span style="font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Tổng giờ nghe</span>
+                                <span style="font-size: 1.2rem; font-weight: 700; color: var(--accent-color); margin-top: 2px;"><i class="bi bi-clock-history"></i> <span id="share-card-hours">0</span>h</span>
+                            </div>
+                        </div>
+                        
+                        <div style="width: 100%; display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">
+                                <span>Tiến độ lộ trình:</span>
+                                <span id="share-card-pct-label" style="font-weight: 700; color: var(--color-success);">0%</span>
+                            </div>
+                            <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden;">
+                                <div id="share-card-progress-bar" style="height: 100%; background: var(--primary-gradient); width: 0%;"></div>
+                            </div>
+                        </div>
+                        
+                        <p style="font-size: 0.72rem; font-style: italic; color: var(--text-muted); margin-top: 8px; line-height: 1.4;">"Nỗ lực hôm nay, thành quả ngày mai. Cố lên ní ơi!"</p>
+                    </div>
+                    
+                    <button class="btn btn-primary" id="btn-download-share-card" style="width: 100%; justify-content: center;">
+                        <i class="bi bi-download"></i> Tải ảnh về máy (.png)
+                    </button>
                 </div>
             </div>
         </div>

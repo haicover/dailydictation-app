@@ -43,6 +43,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initNotesModal();
     initBackupRestore();
     initExcludeToggle();
+    initPomodoro();
+    initNotesTabs();
+    initFlashcardEvents();
+    initShareModal();
     fetchProgress();
 });
 
@@ -115,21 +119,38 @@ function initModal() {
 // -------------------------------------------------------------
 function initPlannerInputs() {
     const inputDays = document.getElementById('lessons-per-day');
+    const inputWeeks = document.getElementById('lessons-per-week');
     
     // Đọc mục tiêu cũ nếu có
     const savedTarget = localStorage.getItem('lessonsPerDay');
     if (savedTarget) {
         appState.lessonsPerDay = parseInt(savedTarget, 10);
-        inputDays.value = appState.lessonsPerDay;
+        if (inputDays) inputDays.value = appState.lessonsPerDay;
     }
 
-    inputDays.addEventListener('input', (e) => {
-        let val = parseInt(e.target.value, 10);
-        if (isNaN(val) || val < 1) val = 1;
-        appState.lessonsPerDay = val;
-        localStorage.setItem('lessonsPerDay', val);
-        updateCalculations();
-    });
+    if (inputDays) {
+        inputDays.addEventListener('input', (e) => {
+            let val = parseInt(e.target.value, 10);
+            if (isNaN(val) || val < 1) val = 1;
+            appState.lessonsPerDay = val;
+            localStorage.setItem('lessonsPerDay', val);
+            updateCalculations();
+        });
+    }
+
+    if (inputWeeks) {
+        const savedTargetWeek = localStorage.getItem('lessonsPerWeek') || 15;
+        appState.lessonsPerWeek = parseInt(savedTargetWeek, 10);
+        inputWeeks.value = appState.lessonsPerWeek;
+
+        inputWeeks.addEventListener('input', (e) => {
+            let val = parseInt(e.target.value, 10);
+            if (isNaN(val) || val < 1) val = 1;
+            appState.lessonsPerWeek = val;
+            localStorage.setItem('lessonsPerWeek', val);
+            updateCalculations();
+        });
+    }
 }
 
 // -------------------------------------------------------------
@@ -575,6 +596,43 @@ function updateCalculations() {
         studyTimeEl.innerText = `${totalHours} giờ (${totalCompleted} bài)`;
     }
 
+    // 3.6 Cập nhật mục tiêu tuần
+    const weeklyInfo = getLessonsCompletedThisWeek();
+    const weeklyCount = weeklyInfo.count;
+    const weeklyTarget = appState.lessonsPerWeek || 15;
+    const weeklyPct = Math.min(100, Math.round((weeklyCount / weeklyTarget) * 100));
+    
+    const weeklyProgressText = document.getElementById('weekly-progress-text');
+    if (weeklyProgressText) weeklyProgressText.innerText = `${weeklyCount}/${weeklyTarget} bài`;
+    
+    const weeklyProgressFill = document.getElementById('weekly-progress-fill');
+    if (weeklyProgressFill) weeklyProgressFill.style.width = `${weeklyPct}%`;
+    
+    const daySpans = document.querySelectorAll('.weekly-days-row span');
+    daySpans.forEach(span => {
+        const dayNum = parseInt(span.getAttribute('data-day'), 10);
+        if (weeklyInfo.studiedDays.has(dayNum)) {
+            span.classList.add('active');
+        } else {
+            span.classList.remove('active');
+        }
+    });
+
+    // 3.7 Ước tính điểm thi
+    const toeic = appState.courses.find(c => c.key === 'toeic');
+    const estToeicEl = document.getElementById('est-toeic');
+    if (toeic && estToeicEl) {
+        const score = 110 + Math.round((toeic.completed / toeic.total) * 385);
+        estToeicEl.innerText = `${score} / 495 L`;
+    }
+
+    const ielts = appState.courses.find(c => c.key === 'ielts');
+    const estIeltsEl = document.getElementById('est-ielts');
+    if (ielts && estIeltsEl) {
+        const band = (4.0 + (ielts.completed / ielts.total) * 5.0).toFixed(1);
+        estIeltsEl.innerText = `Band ${band} / 9.0 L`;
+    }
+
     // 4. Cập nhật gợi ý học tiếp theo
     updateRecommendations();
 
@@ -589,6 +647,15 @@ function updateCalculations() {
 
     // 8. Kiểm tra lời nhắc hàng ngày
     checkDailyReminder();
+
+    // V2: Render biểu đồ 7 ngày
+    renderStudyHistoryChart();
+
+    // V2: Render heatmap 30 ngày
+    renderStudyHeatmap();
+
+    // V2: Thống kê thói quen học
+    renderHabitAnalytics();
 }
 
 // -------------------------------------------------------------
@@ -773,6 +840,15 @@ function saveProgressAndLogCompletions(payload) {
         });
         
         localStorage.setItem('studyActivityLog', JSON.stringify(activityLog));
+
+        // Thống kê thói quen học tập theo giờ
+        const currentHour = new Date().getHours();
+        const hourlyLog = JSON.parse(localStorage.getItem('syncHabitHistory')) || Array(24).fill(0);
+        hourlyLog[currentHour]++;
+        localStorage.setItem('syncHabitHistory', JSON.stringify(hourlyLog));
+
+        // Nổ pháo hoa chúc mừng
+        celebrateCompletion();
     }
 
     localStorage.setItem('userProgress', JSON.stringify({
@@ -1042,4 +1118,531 @@ function checkAndRenderBadges(totalCompleted) {
         `;
         grid.insertAdjacentHTML('beforeend', badgeHtml);
     });
+}
+
+// -------------------------------------------------------------
+// V2 BỔ SUNG CÁC HÀM XỬ LÝ (FEATURES V2)
+// -------------------------------------------------------------
+
+// Tính số bài học hoàn thành trong tuần này (Monday - Sunday)
+function getLessonsCompletedThisWeek() {
+    const activityLog = JSON.parse(localStorage.getItem('studyActivityLog')) || {};
+    const today = new Date();
+    const currentDay = today.getDay();
+    const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - distanceToMonday);
+    monday.setHours(0,0,0,0);
+
+    let count = 0;
+    const studiedDays = new Set();
+
+    for (let i = 0; i < 7; i++) {
+        const checkDate = new Date(monday);
+        checkDate.setDate(monday.getDate() + i);
+        const dateStr = checkDate.toLocaleDateString('en-CA');
+        const dayLogs = activityLog[dateStr] || [];
+        let daySum = 0;
+        dayLogs.forEach(l => {
+            daySum += l.delta;
+        });
+        if (daySum > 0) {
+            count += daySum;
+            studiedDays.add(checkDate.getDay());
+        }
+    }
+    return { count, studiedDays };
+}
+
+// Vẽ biểu đồ lịch sử học tập 7 ngày qua
+function renderStudyHistoryChart() {
+    const barsContainer = document.getElementById('history-chart-bars');
+    const labelsContainer = document.getElementById('history-chart-labels');
+    if (!barsContainer || !labelsContainer) return;
+
+    barsContainer.innerHTML = '';
+    labelsContainer.innerHTML = '';
+
+    const activityLog = JSON.parse(localStorage.getItem('studyActivityLog')) || {};
+    
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push(d);
+    }
+
+    let maxVal = appState.lessonsPerDay || 3;
+    const dayValues = days.map(d => {
+        const dateStr = d.toLocaleDateString('en-CA');
+        const logs = activityLog[dateStr] || [];
+        const sum = logs.reduce((acc, curr) => acc + curr.delta, 0);
+        if (sum > maxVal) maxVal = sum;
+        return sum;
+    });
+
+    days.forEach((d, index) => {
+        const val = dayValues[index];
+        const heightPct = Math.max(8, (val / maxVal) * 100); // Tối thiểu 8% để có cột nhỏ nhìn thấy được
+        const dateLabel = d.getDate().toString().padStart(2, '0') + '/' + (d.getMonth() + 1).toString().padStart(2, '0');
+
+        const barHtml = `
+            <div class="chart-bar-wrapper">
+                <div class="chart-bar" style="height: ${heightPct}%;" data-value="+${val}" title="Ngày ${dateLabel}: +${val} bài"></div>
+            </div>
+        `;
+        const labelHtml = `
+            <span style="flex: 1; text-align: center; font-size: 0.65rem;">${dateLabel}</span>
+        `;
+        barsContainer.insertAdjacentHTML('beforeend', barHtml);
+        labelsContainer.insertAdjacentHTML('beforeend', labelHtml);
+    });
+}
+
+// Phát âm thanh tiếng bíp chúc mừng bằng Web Audio API
+function playBeep(frequency, duration, type = 'sine') {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, audioCtx.currentTime);
+        
+        gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + duration);
+    } catch (e) {
+        console.error('AudioContext error:', e);
+    }
+}
+
+// Khởi chạy Pomodoro Focus Timer
+let pomodoroInterval = null;
+let pomodoroSeconds = 25 * 60;
+let pomodoroMode = 'study';
+
+function initPomodoro() {
+    const timeEl = document.getElementById('pomodoro-time');
+    const statusEl = document.getElementById('pomodoro-status');
+    const btnStart = document.getElementById('btn-pomodoro-start');
+    const btnPause = document.getElementById('btn-pomodoro-pause');
+    const btnReset = document.getElementById('btn-pomodoro-reset');
+
+    if (!timeEl || !statusEl || !btnStart || !btnPause || !btnReset) return;
+
+    function updateDisplay() {
+        const m = Math.floor(pomodoroSeconds / 60).toString().padStart(2, '0');
+        const s = (pomodoroSeconds % 60).toString().padStart(2, '0');
+        timeEl.innerText = `${m}:${s}`;
+    }
+
+    btnStart.addEventListener('click', () => {
+        btnStart.style.display = 'none';
+        btnPause.style.display = 'inline-flex';
+        statusEl.innerText = pomodoroMode === 'study' ? '🔥 Đang tập trung học...' : '🍵 Đang giải lao thư giãn...';
+        statusEl.style.color = pomodoroMode === 'study' ? 'var(--color-danger)' : 'var(--color-success)';
+
+        playBeep(440, 0.1); // Beep starting
+
+        pomodoroInterval = setInterval(() => {
+            pomodoroSeconds--;
+            updateDisplay();
+
+            if (pomodoroSeconds <= 0) {
+                clearInterval(pomodoroInterval);
+                
+                // Tiếng bíp chúc mừng (ascending chord C-E-G)
+                playBeep(523.25, 0.15);
+                setTimeout(() => playBeep(659.25, 0.25), 150);
+                setTimeout(() => playBeep(783.99, 0.35), 300);
+                
+                if (pomodoroMode === 'study') {
+                    pomodoroMode = 'break';
+                    pomodoroSeconds = 5 * 60;
+                    statusEl.innerText = '🎉 Hết giờ học! Hãy nghỉ giải lao 5 phút.';
+                    alert('🎉 Ní ơi! Đã hết 25 phút tập trung học. Hãy đứng dậy đi lại và uống nước nhé!');
+                } else {
+                    pomodoroMode = 'study';
+                    pomodoroSeconds = 25 * 60;
+                    statusEl.innerText = '⏰ Nghỉ xong rồi! Bắt đầu học tiếp thôi.';
+                }
+                
+                btnStart.style.display = 'inline-flex';
+                btnPause.style.display = 'none';
+                updateDisplay();
+            }
+        }, 1000);
+    });
+
+    btnPause.addEventListener('click', () => {
+        clearInterval(pomodoroInterval);
+        btnStart.style.display = 'inline-flex';
+        btnPause.style.display = 'none';
+        statusEl.innerText = '⏸️ Đang tạm dừng';
+        statusEl.style.color = 'var(--color-warning)';
+    });
+
+    btnReset.addEventListener('click', () => {
+        clearInterval(pomodoroInterval);
+        pomodoroMode = 'study';
+        pomodoroSeconds = 25 * 60;
+        updateDisplay();
+        btnStart.style.display = 'inline-flex';
+        btnPause.style.display = 'none';
+        statusEl.innerText = 'Sẵn sàng học tập';
+        statusEl.style.color = 'var(--color-warning)';
+    });
+}
+
+// Bắn pháo hoa ăn mừng đồng bộ thành công bài mới
+function celebrateCompletion() {
+    // 1. Phát nhạc chúc mừng (hợp âm đô trưởng vui vẻ)
+    playBeep(523.25, 0.1, 'sine');
+    setTimeout(() => playBeep(659.25, 0.1, 'sine'), 100);
+    setTimeout(() => playBeep(783.99, 0.1, 'sine'), 200);
+    setTimeout(() => playBeep(1046.50, 0.35, 'sine'), 300);
+
+    // 2. Chạy hiệu ứng pháo hoa
+    const loadAndLaunch = () => {
+        if (window.confetti) {
+            window.confetti({
+                particleCount: 160,
+                spread: 80,
+                origin: { y: 0.6 }
+            });
+        }
+    };
+
+    if (window.confetti) {
+        loadAndLaunch();
+    } else {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js';
+        script.onload = loadAndLaunch;
+        document.head.appendChild(script);
+    }
+}
+
+// Render lưới đóng dấu 30 ngày (Study Heatmap)
+function renderStudyHeatmap() {
+    const grid = document.getElementById('heatmap-grid');
+    if (!grid) return;
+
+    grid.innerHTML = '';
+    const activityLog = JSON.parse(localStorage.getItem('studyActivityLog')) || {};
+    
+    const days = [];
+    for (let i = 29; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        days.push(d);
+    }
+
+    days.forEach(d => {
+        const dateStr = d.toLocaleDateString('en-CA');
+        const logs = activityLog[dateStr] || [];
+        const sum = logs.reduce((acc, curr) => acc + curr.delta, 0);
+
+        let colorStyle = 'background: rgba(255, 255, 255, 0.03);';
+        if (sum > 0) {
+            if (sum <= 2) {
+                colorStyle = 'background: rgba(16, 185, 129, 0.2); border: 1px solid rgba(16, 185, 129, 0.3);';
+            } else if (sum <= 5) {
+                colorStyle = 'background: rgba(16, 185, 129, 0.55); border: 1px solid rgba(16, 185, 129, 0.6);';
+            } else {
+                colorStyle = 'background: rgba(16, 185, 129, 0.9); border: 1px solid rgba(16, 185, 129, 1.0);';
+            }
+        }
+
+        const dateLabel = d.getDate().toString().padStart(2, '0') + '/' + (d.getMonth() + 1).toString().padStart(2, '0');
+        const tile = document.createElement('div');
+        tile.className = 'heatmap-tile';
+        tile.style.cssText = colorStyle;
+        tile.title = `${dateLabel}: +${sum} bài`;
+        grid.appendChild(tile);
+    });
+}
+
+// Xử lý chuyển tab trong modal ghi chú
+function initNotesTabs() {
+    const tabs = document.querySelectorAll('.tab-btn');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            e.preventDefault();
+            tabs.forEach(t => {
+                t.classList.remove('active');
+                t.style.borderBottomColor = 'transparent';
+                t.style.color = 'var(--text-muted)';
+            });
+            tab.classList.add('active');
+            tab.style.borderBottomColor = 'var(--primary-color)';
+            tab.style.color = 'var(--text-main)';
+
+            // Hide all tab content
+            const targetId = tab.getAttribute('data-tab');
+            const contents = document.querySelectorAll('#notes-modal .tab-content');
+            contents.forEach(c => {
+                c.style.display = 'none';
+            });
+            
+            const targetContent = document.getElementById(targetId);
+            if (targetContent) {
+                targetContent.style.display = 'block';
+            }
+
+            if (targetId === 'tab-flash') {
+                setupFlashcards();
+            }
+        });
+    });
+
+    // Tra từ điển bằng API miễn phí
+    const btnDictSearch = document.getElementById('btn-dict-search');
+    const dictInput = document.getElementById('dict-search-input');
+    const dictResult = document.getElementById('dict-result');
+
+    if (btnDictSearch && dictInput && dictResult) {
+        btnDictSearch.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const query = dictInput.value.trim();
+            if (query === '') return;
+
+            dictResult.innerHTML = '⏳ Đang tra cứu từ điển...';
+            try {
+                const res = await fetch(`https://api.dictionaryapi.dev/api/v2/entries/en/${query}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const entry = data[0];
+                    const phonetic = entry.phonetic || (entry.phonetics && entry.phonetics[0] && entry.phonetics[0].text) || '';
+                    
+                    const meanings = entry.meanings.slice(0, 3).map(m => {
+                        const definitions = m.definitions.slice(0, 2).map(d => `<li>${d.definition}</li>`).join('');
+                        return `
+                            <div style="margin-top: 6px;">
+                                <strong style="color: var(--primary-color);">[${m.partOfSpeech}]</strong>
+                                <ul style="padding-left: 16px; margin-top: 2px;">${definitions}</ul>
+                            </div>
+                        `;
+                    }).join('');
+
+                    dictResult.innerHTML = `
+                        <div style="font-size: 1.1rem; font-weight: 700; color: #ffffff; display: flex; align-items: center; gap: 8px;">
+                            ${entry.word}
+                            <span style="font-size: 0.8rem; font-weight: 400; color: var(--accent-color);">${phonetic}</span>
+                        </div>
+                        <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px;">
+                            ${meanings}
+                        </div>
+                    `;
+                } else {
+                    dictResult.innerHTML = '❌ Không tìm thấy từ này trong từ điển.';
+                }
+            } catch (err) {
+                dictResult.innerHTML = '❌ Lỗi kết nối dịch vụ từ điển.';
+            }
+        });
+    }
+}
+
+// Cấu hình Flashcard ôn tập từ vựng
+let currentFlashcardIndex = 0;
+let flashcards = [];
+
+function setupFlashcards() {
+    const notesText = document.getElementById('notes-textarea').value || '';
+    const frontText = document.getElementById('flash-front-text');
+    const backText = document.getElementById('flash-back-text');
+    const counter = document.getElementById('flash-counter');
+    const cardInner = document.getElementById('flash-card-inner');
+
+    if (!frontText || !backText || !counter || !cardInner) return;
+
+    cardInner.classList.remove('flipped');
+
+    flashcards = [];
+    const lines = notesText.split('\n');
+    lines.forEach(line => {
+        let splitChar = null;
+        if (line.includes('-')) splitChar = '-';
+        else if (line.includes(':')) splitChar = ':';
+
+        if (splitChar) {
+            const parts = line.split(splitChar);
+            const front = parts[0].trim();
+            const back = parts.slice(1).join(splitChar).trim();
+            if (front !== '' && back !== '') {
+                flashcards.push({ front, back });
+            }
+        }
+    });
+
+    if (flashcards.length === 0) {
+        frontText.innerText = 'Không có Flashcard';
+        backText.innerText = 'Hãy viết ghi chú dạng "từ - nghĩa" (mỗi dòng một cặp) để tạo thẻ lật học tập!';
+        counter.innerText = '0/0 thẻ';
+        return;
+    }
+
+    currentFlashcardIndex = 0;
+    showFlashcard();
+}
+
+function showFlashcard() {
+    const frontText = document.getElementById('flash-front-text');
+    const backText = document.getElementById('flash-back-text');
+    const counter = document.getElementById('flash-counter');
+    const cardInner = document.getElementById('flash-card-inner');
+
+    cardInner.classList.remove('flipped');
+    
+    const card = flashcards[currentFlashcardIndex];
+    frontText.innerText = card.front;
+    backText.innerText = card.back;
+    counter.innerText = `${currentFlashcardIndex + 1}/${flashcards.length} thẻ`;
+}
+
+function initFlashcardEvents() {
+    const cardContainer = document.getElementById('flash-card-container');
+    const cardInner = document.getElementById('flash-card-inner');
+    const btnPrev = document.getElementById('btn-flash-prev');
+    const btnNext = document.getElementById('btn-flash-next');
+
+    if (!cardContainer || !cardInner || !btnPrev || !btnNext) return;
+
+    cardContainer.addEventListener('click', (e) => {
+        e.preventDefault();
+        cardInner.classList.toggle('flipped');
+    });
+
+    btnPrev.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (flashcards.length === 0) return;
+        currentFlashcardIndex = (currentFlashcardIndex - 1 + flashcards.length) % flashcards.length;
+        showFlashcard();
+    });
+
+    btnNext.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (flashcards.length === 0) return;
+        currentFlashcardIndex = (currentFlashcardIndex + 1) % flashcards.length;
+        showFlashcard();
+    });
+}
+
+// Thống kê thói quen học tập (Habit Analytics)
+function renderHabitAnalytics() {
+    const habitEl = document.getElementById('habit-analytics-text');
+    if (!habitEl) return;
+
+    const hourlyLog = JSON.parse(localStorage.getItem('syncHabitHistory')) || Array(24).fill(0);
+    const maxVal = Math.max(...hourlyLog);
+    if (maxVal === 0) {
+        habitEl.innerHTML = `<i class="bi bi-info-circle text-info"></i> Hãy học nhiều hơn để thống kê khung giờ hiệu quả nhất.`;
+        return;
+    }
+
+    const maxHour = hourlyLog.indexOf(maxVal);
+    let timeLabel = "Đêm muộn";
+    if (maxHour >= 5 && maxHour < 12) timeLabel = "Buổi sáng";
+    else if (maxHour >= 12 && maxHour < 18) timeLabel = "Buổi chiều";
+    else if (maxHour >= 18 && maxHour < 22) timeLabel = "Buổi tối";
+
+    const formattedHour = `${maxHour.toString().padStart(2, '0')}:00 - ${(maxHour+1).toString().padStart(2, '0')}:00`;
+    habitEl.innerHTML = `<i class="bi bi-lightning-fill text-warning"></i> Giờ học hiệu quả nhất của ní: ${formattedHour} (${timeLabel})`;
+}
+
+// Khởi tạo Modal Chia sẻ thiệp thành tích
+function initShareModal() {
+    const modal = document.getElementById('share-modal');
+    const btnOpen = document.getElementById('btn-share-modal');
+    const btnClose = document.getElementById('btn-close-share-modal');
+    const btnDownload = document.getElementById('btn-download-share-card');
+
+    if (btnOpen && modal) {
+        btnOpen.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            document.getElementById('share-card-name').innerText = appState.profileName;
+            
+            const streakData = JSON.parse(localStorage.getItem('studyStreak')) || { count: 0 };
+            document.getElementById('share-card-streak').innerText = streakData.count;
+
+            let totalCompleted = 0;
+            let totalLessons = 0;
+            const excludedCourses = JSON.parse(localStorage.getItem('excludedCourses')) || {};
+            appState.courses.forEach(course => {
+                if (excludedCourses[course.key]) return;
+                totalCompleted += course.completed;
+                totalLessons += course.total;
+            });
+            
+            const totalHours = ((totalCompleted * 6) / 60).toFixed(1);
+            document.getElementById('share-card-hours').innerText = totalHours;
+
+            const overallPct = totalLessons > 0 ? Math.round((totalCompleted / totalLessons) * 100) : 0;
+            document.getElementById('share-card-pct-label').innerText = `${overallPct}%`;
+            document.getElementById('share-card-progress-bar').style.width = `${overallPct}%`;
+
+            modal.classList.add('show');
+        });
+    }
+
+    if (btnClose) btnClose.addEventListener('click', () => modal.classList.remove('show'));
+
+    // Đóng khi click ngoài backdrop
+    window.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.classList.remove('show');
+        }
+    });
+
+    if (btnDownload) {
+        btnDownload.addEventListener('click', () => {
+            btnDownload.innerText = '⏳ Đang tạo ảnh...';
+            btnDownload.disabled = true;
+
+            const loadScriptAndDownload = () => {
+                const card = document.getElementById('share-card-canvas');
+                window.html2canvas(card, {
+                    backgroundColor: null,
+                    scale: 2 // Tạo ảnh nét gấp đôi
+                }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = `dailydictation_achievement_${appState.profileName}.png`;
+                    link.href = canvas.toDataURL();
+                    link.click();
+                    
+                    btnDownload.innerHTML = '<i class="bi bi-download"></i> Tải ảnh về máy (.png)';
+                    btnDownload.disabled = false;
+                }).catch(err => {
+                    console.error('Lỗi khi vẽ canvas:', err);
+                    btnDownload.innerHTML = '<i class="bi bi-download"></i> Tải ảnh về máy (.png)';
+                    btnDownload.disabled = false;
+                    alert('Không thể tạo ảnh chia sẻ trên trình duyệt này.');
+                });
+            };
+
+            if (window.html2canvas) {
+                loadScriptAndDownload();
+            } else {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+                script.onload = loadScriptAndDownload;
+                script.onerror = () => {
+                    alert('Lỗi khi tải thư viện html2canvas.');
+                    btnDownload.innerHTML = '<i class="bi bi-download"></i> Tải ảnh về máy (.png)';
+                    btnDownload.disabled = false;
+                };
+                document.head.appendChild(script);
+            }
+        });
+    }
 }
