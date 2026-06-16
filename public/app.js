@@ -33,16 +33,45 @@ let appState = {
 // URL gốc của DailyDictation để tạo link
 const BASE_URL = 'https://dailydictation.com';
 
-// -------------------------------------------------------------
-// Khởi chạy
-// -------------------------------------------------------------
 document.addEventListener('DOMContentLoaded', () => {
+    initTheme();
     initBookmarklet();
     initModal();
     initPlannerInputs();
     initDragAndDrop();
     fetchProgress();
 });
+
+// -------------------------------------------------------------
+// Quản lý Giao diện (Theme)
+// -------------------------------------------------------------
+function initTheme() {
+    const btnToggle = document.getElementById('btn-theme-toggle');
+    const icon = document.getElementById('theme-icon');
+    
+    let currentTheme = localStorage.getItem('appTheme') || 'dark';
+    applyTheme(currentTheme);
+
+    if (btnToggle) {
+        btnToggle.addEventListener('click', () => {
+            let targetTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
+            applyTheme(targetTheme);
+            localStorage.setItem('appTheme', targetTheme);
+        });
+    }
+
+    function applyTheme(theme) {
+        if (theme === 'light') {
+            document.body.classList.remove('dark-theme');
+            document.body.classList.add('light-theme');
+            if (icon) icon.className = 'bi bi-moon-fill';
+        } else {
+            document.body.classList.remove('light-theme');
+            document.body.classList.add('dark-theme');
+            if (icon) icon.className = 'bi bi-sun-fill';
+        }
+    }
+}
 
 // -------------------------------------------------------------
 // Thiết lập Bookmarklet
@@ -472,6 +501,68 @@ function updateCalculations() {
 
     // 4. Cập nhật gợi ý học tiếp theo
     updateRecommendations();
+
+    // 5. Cập nhật Chuỗi ngày học liên tục (Streak)
+    checkAndRenderStreak(totalCompleted);
+}
+
+// -------------------------------------------------------------
+// Kiểm tra và hiển thị chuỗi ngày học liên tục (Streak)
+// -------------------------------------------------------------
+function checkAndRenderStreak(totalCompleted) {
+    if (totalCompleted === 0) return;
+    
+    const streakData = JSON.parse(localStorage.getItem('studyStreak')) || { count: 0, lastActiveDate: null, lastCompletedCount: 0 };
+    const todayStr = new Date().toLocaleDateString('en-CA'); // Định dạng YYYY-MM-DD
+    
+    if (!streakData.lastActiveDate) {
+        streakData.count = 1;
+        streakData.lastActiveDate = todayStr;
+        streakData.lastCompletedCount = totalCompleted;
+    } else {
+        const lastDate = new Date(streakData.lastActiveDate);
+        const today = new Date(todayStr);
+        
+        // Tính khoảng cách ngày
+        const diffTime = today - lastDate;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 0) {
+            // Cùng một ngày
+            if (totalCompleted > streakData.lastCompletedCount) {
+                streakData.lastCompletedCount = totalCompleted;
+            }
+        } else if (diffDays === 1) {
+            // Ngày hôm sau (Tiếp tục Streak)
+            if (totalCompleted > streakData.lastCompletedCount) {
+                streakData.count += 1;
+                streakData.lastActiveDate = todayStr;
+                streakData.lastCompletedCount = totalCompleted;
+            }
+        } else if (diffDays > 1) {
+            // Bị đứt chuỗi ngày học
+            if (totalCompleted > streakData.lastCompletedCount) {
+                streakData.count = 1; // Bắt đầu chuỗi mới hôm nay
+                streakData.lastActiveDate = todayStr;
+                streakData.lastCompletedCount = totalCompleted;
+            } else {
+                streakData.count = 0; // Đứt chuỗi và chưa học bài mới nào hôm nay
+            }
+        }
+    }
+    
+    localStorage.setItem('studyStreak', JSON.stringify(streakData));
+    
+    const container = document.getElementById('streak-badge-container');
+    const countSpan = document.getElementById('streak-count');
+    if (container && countSpan) {
+        if (streakData.count > 0) {
+            countSpan.innerText = streakData.count;
+            container.style.display = 'flex';
+        } else {
+            container.style.display = 'none';
+        }
+    }
 }
 
 // -------------------------------------------------------------

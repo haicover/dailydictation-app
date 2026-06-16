@@ -32,9 +32,15 @@
                     <span class="username" id="profile-name">Chưa kết nối</span>
                     <span class="sync-status" id="sync-time">Cần đồng bộ tiến độ</span>
                 </div>
+                <div class="streak-badge" id="streak-badge-container" style="display: none;">
+                    <i class="bi bi-fire text-danger"></i> <span id="streak-count">0</span> ngày
+                </div>
             </div>
 
             <div class="header-actions">
+                <button id="btn-theme-toggle" class="btn btn-secondary" style="padding: 10px 14px;" title="Đổi giao diện Sáng/Tối">
+                    <i class="bi bi-sun-fill" id="theme-icon"></i>
+                </button>
                 <button id="btn-sync-modal" class="btn btn-primary">
                     <i class="bi bi-arrow-repeat"></i> Đồng bộ hóa
                 </button>
