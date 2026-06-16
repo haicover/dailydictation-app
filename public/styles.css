@@ -969,3 +969,233 @@ body {
     50% { transform: scale(1.04); box-shadow: 0 0 8px 2px rgba(239, 68, 68, 0.1); }
     100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
 }
+
+/* --- FEATURES 3 to 10 STYLES --- */
+
+/* Search and Filters */
+.roadmap-controls {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.search-box {
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 10px 12px 10px 38px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-main);
+    font-family: inherit;
+    font-size: 0.88rem;
+    transition: var(--transition-smooth);
+}
+
+body.light-theme .search-box input {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.search-box input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.filter-buttons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.btn-filter {
+    padding: 8px 14px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+body.light-theme .btn-filter {
+    background: rgba(0, 0, 0, 0.03);
+}
+
+.btn-filter:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-main);
+}
+
+body.light-theme .btn-filter:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.btn-filter.active {
+    background: var(--primary-gradient);
+    color: #ffffff;
+    border-color: transparent;
+    box-shadow: 0 4px 10px rgba(99, 102, 241, 0.2);
+}
+
+/* Course Notes & Exclude Buttons */
+.btn-note, .btn-exclude {
+    background: none;
+    border: none;
+    padding: 4px;
+    cursor: pointer;
+    color: var(--text-dark);
+    font-size: 0.95rem;
+    transition: var(--transition-smooth);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+.btn-note:hover {
+    color: var(--primary-color);
+    background: rgba(99, 102, 241, 0.1);
+}
+
+.btn-exclude:hover {
+    color: var(--color-danger);
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.course-item.excluded {
+    opacity: 0.4;
+    border-style: dashed;
+}
+
+.course-item.excluded .course-item-title {
+    text-decoration: line-through;
+    color: var(--text-dark);
+    pointer-events: none;
+}
+
+/* Badge Items */
+.badge-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 8px;
+    border-radius: 10px;
+    border: 1px solid var(--border-color);
+    background: rgba(255, 255, 255, 0.02);
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+body.light-theme .badge-item {
+    background: rgba(0, 0, 0, 0.01);
+}
+
+.badge-item.locked {
+    filter: grayscale(1) opacity(0.35);
+}
+
+.badge-item.unlocked {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.badge-item.unlocked:hover {
+    transform: translateY(-4px) scale(1.05);
+    box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
+    filter: brightness(1.1);
+}
+
+/* Reminder Banner */
+.reminder-banner {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(245, 158, 11, 0.12) 100%);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    margin-bottom: 20px;
+    animation: slideDown 0.4s ease-out;
+}
+
+body.light-theme .reminder-banner {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.06) 0%, rgba(245, 158, 11, 0.06) 100%);
+    border-color: rgba(239, 68, 68, 0.15);
+}
+
+.reminder-icon {
+    color: var(--color-danger);
+    font-size: 1.15rem;
+    animation: ring 2s ease-in-out infinite;
+}
+
+.reminder-text {
+    flex: 1;
+    font-size: 0.88rem;
+    color: var(--text-main);
+    font-weight: 500;
+}
+
+.btn-close-reminder {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: var(--transition-smooth);
+}
+
+.btn-close-reminder:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+body.light-theme .btn-close-reminder:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+/* Animations */
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes ring {
+    0%, 100% { transform: rotate(0); }
+    10% { transform: rotate(15deg); }
+    20% { transform: rotate(-15deg); }
+    30% { transform: rotate(10deg); }
+    40% { transform: rotate(-10deg); }
+    50% { transform: rotate(5deg); }
+    60% { transform: rotate(-5deg); }
+    70% { transform: rotate(0); }
+}
+
+@keyframes pulse-soft {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); filter: brightness(1.05); }
+    100% { transform: scale(1); }
+}
+

@@ -39,6 +39,10 @@ document.addEventListener('DOMContentLoaded', () => {
     initModal();
     initPlannerInputs();
     initDragAndDrop();
+    initSearchAndFilter();
+    initNotesModal();
+    initBackupRestore();
+    initExcludeToggle();
     fetchProgress();
 });
 
@@ -185,11 +189,7 @@ function handleFiles(files) {
 // Gửi file JSON lên backend để lưu
 async function uploadProgressData(payload) {
     // Lưu vào localStorage trước tiên để hỗ trợ serverless
-    localStorage.setItem('userProgress', JSON.stringify({
-        profileName: payload.profileName || 'Học viên',
-        timestamp: payload.timestamp || payload.lastUpdated || new Date().toISOString(),
-        courses: payload.courses
-    }));
+    saveProgressAndLogCompletions(payload);
 
     try {
         const res = await fetch('/api/sync', {
@@ -224,11 +224,7 @@ function checkUrlHash() {
             const payload = JSON.parse(decodedStr);
             
             // Lưu vào localStorage
-            localStorage.setItem('userProgress', JSON.stringify({
-                profileName: payload.profileName || 'Học viên',
-                timestamp: payload.timestamp || new Date().toISOString(),
-                courses: payload.courses
-            }));
+            saveProgressAndLogCompletions(payload);
             
             // Gửi lên backend nếu có chạy local
             fetch('/api/sync', {
@@ -352,35 +348,98 @@ function updateUI() {
     updateCalculations();
 }
 
+let currentFilter = 'all';
+let searchQuery = '';
+
 function renderPhaseCourses(phaseNum) {
     const container = document.getElementById(`phase-${phaseNum}-courses`);
     if (!container) return;
     
     container.innerHTML = '';
-    const phaseCourses = appState.courses.filter(c => c.phase === phaseNum);
+    let phaseCourses = appState.courses.filter(c => c.phase === phaseNum);
     
+    // Áp dụng bộ lọc tìm kiếm
+    if (searchQuery.trim() !== '') {
+        const query = searchQuery.toLowerCase();
+        phaseCourses = phaseCourses.filter(c => 
+            c.title.toLowerCase().includes(query) || 
+            c.levels.toLowerCase().includes(query)
+        );
+    }
+
+    // Áp dụng bộ lọc trạng thái & bỏ qua khóa học
+    const excludedCourses = JSON.parse(localStorage.getItem('excludedCourses')) || {};
+    
+    if (currentFilter !== 'all') {
+        phaseCourses = phaseCourses.filter(c => {
+            const isExcluded = excludedCourses[c.key] === true;
+            if (isExcluded) return false;
+
+            const isCompleted = c.completed >= c.total && c.total > 0;
+            const isLearning = !isCompleted && c.completed > 0;
+            const isUnstarted = c.completed === 0;
+
+            if (currentFilter === 'completed') return isCompleted;
+            if (currentFilter === 'learning') return isLearning;
+            if (currentFilter === 'unstarted') return isUnstarted;
+            return true;
+        });
+    }
+
+    // Ẩn/hiện Giai đoạn nếu không có khóa học nào khớp
+    const phaseEl = document.getElementById(`phase-${phaseNum}`);
+    if (phaseEl) {
+        if (phaseCourses.length === 0) {
+            phaseEl.style.display = 'none';
+        } else {
+            phaseEl.style.display = 'block';
+        }
+    }
+
+    const notes = JSON.parse(localStorage.getItem('courseNotes')) || {};
+
     phaseCourses.forEach(course => {
         const pct = course.total > 0 ? Math.round((course.completed / course.total) * 100) : 0;
         
         const isCompleted = course.completed >= course.total && course.total > 0;
-        const isActive = !isCompleted && (course.completed > 0 || isCourseNextInQueue(course));
+        const isExcluded = excludedCourses[course.key] === true;
+        const isActive = !isExcluded && !isCompleted && (course.completed > 0 || isCourseNextInQueue(course));
         
         let statusClass = '';
         let statusIcon = '<i class="bi bi-circle"></i>';
         
-        if (isCompleted) {
+        if (isExcluded) {
+            statusClass = 'excluded';
+            statusIcon = '<i class="bi bi-eye-slash-fill text-danger"></i>';
+        } else if (isCompleted) {
             statusClass = 'completed';
             statusIcon = '<i class="bi bi-check-circle-fill"></i>';
         } else if (isActive) {
             statusClass = 'active';
             statusIcon = '<i class="bi bi-play-circle-fill"></i>';
         }
+
+        const hasNote = notes[course.key] && notes[course.key].trim() !== '';
+        const noteBtnColor = hasNote ? 'color: var(--primary-color);' : 'color: var(--text-dark);';
+        const noteBtnTitle = hasNote ? 'Xem/Sửa ghi chú (Đã có ghi chú)' : 'Thêm ghi chú';
+
+        const excludeBtnColor = isExcluded ? 'color: var(--color-danger);' : 'color: var(--text-dark);';
+        const excludeBtnTitle = isExcluded ? 'Khôi phục khóa học' : 'Bỏ qua khóa học';
+        const excludeIcon = isExcluded ? 'bi-eye-slash-fill' : 'bi-eye-slash';
         
         const cardHtml = `
             <div class="course-item ${statusClass}">
                 <div class="course-item-header">
                     <a href="${BASE_URL}${course.link}" target="_blank" class="course-item-title">${course.title}</a>
-                    <span class="course-status-icon">${statusIcon}</span>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button class="btn-note" data-course-key="${course.key}" title="${noteBtnTitle}" style="${noteBtnColor}">
+                            <i class="bi bi-pencil-square"></i>
+                        </button>
+                        <button class="btn-exclude" data-course-key="${course.key}" title="${excludeBtnTitle}" style="${excludeBtnColor}">
+                            <i class="bi ${excludeIcon}"></i>
+                        </button>
+                        <span class="course-status-icon">${statusIcon}</span>
+                    </div>
                 </div>
                 <div class="course-meta">
                     <span class="course-level">Lv: ${course.levels}</span>
@@ -400,18 +459,22 @@ function renderPhaseCourses(phaseNum) {
 
 // Kiểm tra xem khóa học có phải là bài học tiếp theo cần làm không
 function isCourseNextInQueue(course) {
-    // Trả về true nếu đây là khóa học đầu tiên chưa hoàn thành trong giai đoạn hoạt động
+    const excludedCourses = JSON.parse(localStorage.getItem('excludedCourses')) || {};
+    if (excludedCourses[course.key]) return false;
+
     const activePhase = getActivePhase();
     if (course.phase !== activePhase) return false;
     
-    const uncompletedInPhase = appState.courses.filter(c => c.phase === activePhase && c.completed < c.total);
+    const uncompletedInPhase = appState.courses.filter(c => c.phase === activePhase && c.completed < c.total && !excludedCourses[c.key]);
     return uncompletedInPhase.length > 0 && uncompletedInPhase[0].key === course.key;
 }
 
 // Lấy giai đoạn hoạt động hiện tại (giai đoạn có bài chưa học đầu tiên)
 function getActivePhase() {
+    const excludedCourses = JSON.parse(localStorage.getItem('excludedCourses')) || {};
     for (let phase = 1; phase <= 4; phase++) {
-        const phaseCourses = appState.courses.filter(c => c.phase === phase);
+        const phaseCourses = appState.courses.filter(c => c.phase === phase && !excludedCourses[c.key]);
+        if (phaseCourses.length === 0) continue;
         const allCompleted = phaseCourses.every(c => c.completed >= c.total && c.total > 0);
         if (!allCompleted) {
             return phase;
@@ -434,7 +497,12 @@ function updateCalculations() {
         4: { completed: 0, total: 0 }
     };
 
+    const excludedCourses = JSON.parse(localStorage.getItem('excludedCourses')) || {};
+
     appState.courses.forEach(course => {
+        const isExcluded = excludedCourses[course.key] === true;
+        if (isExcluded) return; // Bỏ qua khóa học đã loại trừ
+
         totalCompleted += course.completed;
         totalLessons += course.total;
         
@@ -499,11 +567,28 @@ function updateCalculations() {
         document.getElementById('completion-date').innerText = 'Chúc mừng bạn đã xong!';
     }
 
+    // 3.5 Cập nhật thời gian đã học
+    const totalMinutes = totalCompleted * 6; // trung bình 6 phút/bài
+    const totalHours = (totalMinutes / 60).toFixed(1);
+    const studyTimeEl = document.getElementById('total-study-time');
+    if (studyTimeEl) {
+        studyTimeEl.innerText = `${totalHours} giờ (${totalCompleted} bài)`;
+    }
+
     // 4. Cập nhật gợi ý học tiếp theo
     updateRecommendations();
 
     // 5. Cập nhật Chuỗi ngày học liên tục (Streak)
     checkAndRenderStreak(totalCompleted);
+
+    // 6. Cập nhật Nhật ký học hôm nay
+    renderTodayActivity();
+
+    // 7. Cập nhật Huy chương thành tích
+    checkAndRenderBadges(totalCompleted);
+
+    // 8. Kiểm tra lời nhắc hàng ngày
+    checkDailyReminder();
 }
 
 // -------------------------------------------------------------
@@ -572,8 +657,9 @@ function updateRecommendations() {
     const listContainer = document.getElementById('recommendations-list');
     if (!listContainer) return;
 
-    // Lọc các khóa học chưa hoàn thành
-    const uncompletedCourses = appState.courses.filter(c => c.completed < c.total);
+    // Lọc các khóa học chưa hoàn thành và không bị bỏ qua (exclude)
+    const excludedCourses = JSON.parse(localStorage.getItem('excludedCourses')) || {};
+    const uncompletedCourses = appState.courses.filter(c => c.completed < c.total && !excludedCourses[c.key]);
 
     if (uncompletedCourses.length === 0) {
         listContainer.innerHTML = `
@@ -619,5 +705,341 @@ function updateRecommendations() {
             </a>
         `;
         listContainer.insertAdjacentHTML('beforeend', itemHtml);
+    });
+}
+
+// -------------------------------------------------------------
+// KHỞI TẠO CÁC HÀM HỖ TRỢ VÀ TÍNH NĂNG MỚI (FEATURES 3 TO 10)
+// -------------------------------------------------------------
+
+// Danh sách huy hiệu thành tích
+const BADGES = [
+    { id: 'ipa_complete', title: 'Chiến Binh IPA', desc: 'Hoàn thành 100% khóa học IPA', icon: 'bi-mic-fill', color: '#10b981' },
+    { id: 'phase1_complete', title: 'Khởi Đầu Vững Chắc', desc: 'Hoàn thành Giai đoạn 1', icon: 'bi-mortarboard-fill', color: '#3b82f6' },
+    { id: 'streak_7', title: 'Chăm Chỉ', desc: 'Đạt chuỗi streak liên tục 7 ngày', icon: 'bi-fire', color: '#f59e0b' },
+    { id: 'streak_30', title: 'Chiến Thần Kỷ Luật', desc: 'Đạt chuỗi streak liên tục 30 ngày', icon: 'bi-lightning-charge-fill', color: '#ef4444' },
+    { id: 'lessons_100', title: 'Nỗ Lực Không Ngừng', desc: 'Hoàn thành tổng cộng 100 bài học', icon: 'bi-activity', color: '#8b5cf6' },
+    { id: 'lessons_500', title: 'Cao Thủ Nghe Hiểu', desc: 'Hoàn thành tổng cộng 500 bài học', icon: 'bi-stars', color: '#ec4899' },
+    { id: 'all_complete', title: 'Tốt Nghiệp Vô Song', desc: 'Hoàn thành toàn bộ lộ trình', icon: 'bi-gem', color: '#06b6d4' }
+];
+
+// So sánh tiến độ cũ và mới để ghi nhận bài tập hoàn thành trong ngày
+function saveProgressAndLogCompletions(payload) {
+    const oldProgressStr = localStorage.getItem('userProgress');
+    let oldCourses = [];
+    if (oldProgressStr) {
+        try {
+            const oldProgress = JSON.parse(oldProgressStr);
+            oldCourses = oldProgress.courses || [];
+        } catch (e) {
+            console.error('Error parsing old progress:', e);
+        }
+    }
+
+    const deltas = [];
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    
+    if (payload.courses && Array.isArray(payload.courses)) {
+        payload.courses.forEach(newCourse => {
+            const oldCourse = oldCourses.find(c => 
+                c.link === newCourse.link || 
+                c.title.toLowerCase() === newCourse.title.toLowerCase()
+            );
+            const oldCompleted = oldCourse ? oldCourse.completed : 0;
+            const delta = newCourse.completed - oldCompleted;
+            
+            if (delta > 0) {
+                deltas.push({
+                    title: newCourse.title,
+                    delta: delta
+                });
+            }
+        });
+    }
+
+    if (deltas.length > 0) {
+        const activityLog = JSON.parse(localStorage.getItem('studyActivityLog')) || {};
+        if (!activityLog[todayStr]) {
+            activityLog[todayStr] = [];
+        }
+        
+        deltas.forEach(d => {
+            const existing = activityLog[todayStr].find(item => item.title === d.title);
+            if (existing) {
+                existing.delta += d.delta;
+            } else {
+                activityLog[todayStr].push(d);
+            }
+        });
+        
+        localStorage.setItem('studyActivityLog', JSON.stringify(activityLog));
+    }
+
+    localStorage.setItem('userProgress', JSON.stringify({
+        profileName: payload.profileName || 'Học viên',
+        timestamp: payload.timestamp || new Date().toISOString(),
+        courses: payload.courses
+    }));
+}
+
+// Render hoạt động học tập hôm nay
+function renderTodayActivity() {
+    const listContainer = document.getElementById('today-activity-list');
+    if (!listContainer) return;
+
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const activityLog = JSON.parse(localStorage.getItem('studyActivityLog')) || {};
+    const todayActivities = activityLog[todayStr] || [];
+
+    if (todayActivities.length === 0) {
+        listContainer.innerHTML = '<li>Chưa có hoạt động nào hôm nay. Cố lên ní!</li>';
+        return;
+    }
+
+    listContainer.innerHTML = '';
+    todayActivities.forEach(act => {
+        const li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.justifyContent = 'space-between';
+        li.style.alignItems = 'center';
+        li.style.padding = '4px 0';
+        li.style.borderBottom = '1px dashed rgba(255, 255, 255, 0.04)';
+        li.innerHTML = `
+            <span style="display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><i class="bi bi-play-circle text-success"></i> ${act.title}</span>
+            <span class="badge" style="background: rgba(16, 185, 129, 0.15); color: var(--color-success); border: 1px solid rgba(16, 185, 129, 0.2); font-size: 0.75rem; font-weight: 600; padding: 2px 6px; border-radius: 4px; flex-shrink: 0;">+${act.delta} bài</span>
+        `;
+        listContainer.appendChild(li);
+    });
+}
+
+// Khởi tạo tính năng tìm kiếm và bộ lọc
+function initSearchAndFilter() {
+    const searchInput = document.getElementById('roadmap-search');
+    const filterBtns = document.querySelectorAll('.btn-filter');
+
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            searchQuery = e.target.value;
+            for (let phase = 1; phase <= 4; phase++) {
+                renderPhaseCourses(phase);
+            }
+        });
+    }
+
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            filterBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            currentFilter = btn.getAttribute('data-filter');
+            for (let phase = 1; phase <= 4; phase++) {
+                renderPhaseCourses(phase);
+            }
+        });
+    });
+}
+
+// Khởi tạo modal ghi chú từ vựng
+let activeNoteCourseKey = null;
+function initNotesModal() {
+    const modal = document.getElementById('notes-modal');
+    const btnClose = document.getElementById('btn-close-notes-modal');
+    const btnCancel = document.getElementById('btn-cancel-notes');
+    const btnSave = document.getElementById('btn-save-notes');
+    const textarea = document.getElementById('notes-textarea');
+    const titleSpan = document.getElementById('notes-modal-course-title');
+
+    if (!modal || !btnClose || !btnCancel || !btnSave || !textarea || !titleSpan) return;
+
+    const closeModal = () => modal.classList.remove('show');
+
+    btnClose.addEventListener('click', closeModal);
+    btnCancel.addEventListener('click', closeModal);
+
+    btnSave.addEventListener('click', () => {
+        if (activeNoteCourseKey) {
+            const notes = JSON.parse(localStorage.getItem('courseNotes')) || {};
+            notes[activeNoteCourseKey] = textarea.value;
+            localStorage.setItem('courseNotes', JSON.stringify(notes));
+            closeModal();
+            // Vẽ lại toàn bộ để cập nhật icon bút chì
+            for (let phase = 1; phase <= 4; phase++) {
+                renderPhaseCourses(phase);
+            }
+        }
+    });
+
+    // Ủy quyền sự kiện click mở modal
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-note');
+        if (btn) {
+            e.preventDefault();
+            const courseKey = btn.getAttribute('data-course-key');
+            const course = appState.courses.find(c => c.key === courseKey);
+            if (course) {
+                activeNoteCourseKey = courseKey;
+                titleSpan.innerText = course.title;
+                const notes = JSON.parse(localStorage.getItem('courseNotes')) || {};
+                textarea.value = notes[courseKey] || '';
+                modal.classList.add('show');
+            }
+        }
+    });
+
+    // Đóng khi click ngoài backdrop
+    window.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+}
+
+// Khởi tạo cơ chế bỏ qua khóa học
+function initExcludeToggle() {
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('.btn-exclude');
+        if (btn) {
+            e.preventDefault();
+            const courseKey = btn.getAttribute('data-course-key');
+            const excludedCourses = JSON.parse(localStorage.getItem('excludedCourses')) || {};
+            excludedCourses[courseKey] = !excludedCourses[courseKey];
+            localStorage.setItem('excludedCourses', JSON.stringify(excludedCourses));
+            
+            // Render lại giao diện
+            for (let phase = 1; phase <= 4; phase++) {
+                renderPhaseCourses(phase);
+            }
+            updateCalculations();
+        }
+    });
+}
+
+// Khởi tạo tính năng Sao lưu & Khôi phục
+function initBackupRestore() {
+    const btnBackup = document.getElementById('btn-backup-data');
+    const restoreInput = document.getElementById('restore-input');
+
+    if (btnBackup) {
+        btnBackup.addEventListener('click', () => {
+            const keys = ['userProgress', 'studyStreak', 'studyActivityLog', 'courseNotes', 'excludedCourses', 'lessonsPerDay', 'reminderClosedDate', 'appTheme'];
+            const backupData = {};
+            keys.forEach(k => {
+                backupData[k] = localStorage.getItem(k);
+            });
+
+            const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `dailydictation_planner_backup_${new Date().toLocaleDateString('en-CA')}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    if (restoreInput) {
+        restoreInput.addEventListener('change', (e) => {
+            const files = e.target.files;
+            if (files.length === 0) return;
+            const file = files[0];
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const backupData = JSON.parse(event.target.result);
+                    if (backupData.userProgress || backupData.studyStreak || backupData.studyActivityLog) {
+                        Object.keys(backupData).forEach(k => {
+                            if (backupData[k] !== null) {
+                                localStorage.setItem(k, backupData[k]);
+                            }
+                        });
+                        alert('🎉 Khôi phục dữ liệu thành công! Trang web sẽ tự động tải lại.');
+                        window.location.reload();
+                    } else {
+                        alert('File chọn không hợp lệ hoặc không chứa dữ liệu sao lưu.');
+                    }
+                } catch (err) {
+                    alert('Lỗi định dạng file JSON.');
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
+}
+
+// Kiểm tra lời nhắc học tập hàng ngày
+function checkDailyReminder() {
+    const banner = document.getElementById('daily-reminder-banner');
+    const btnClose = document.getElementById('btn-close-reminder');
+    if (!banner || !btnClose) return;
+
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    const reminderClosedDate = localStorage.getItem('reminderClosedDate');
+    if (reminderClosedDate === todayStr) {
+        banner.style.display = 'none';
+        return;
+    }
+
+    const activityLog = JSON.parse(localStorage.getItem('studyActivityLog')) || {};
+    const todayActivities = activityLog[todayStr] || [];
+
+    if (todayActivities.length === 0) {
+        banner.style.display = 'flex';
+    } else {
+        banner.style.display = 'none';
+    }
+
+    btnClose.onclick = () => {
+        banner.style.display = 'none';
+        localStorage.setItem('reminderClosedDate', todayStr);
+    };
+}
+
+// Kiểm tra và hiển thị huy chương thành tích
+function checkAndRenderBadges(totalCompleted) {
+    const grid = document.getElementById('badges-grid');
+    if (!grid) return;
+
+    const streakData = JSON.parse(localStorage.getItem('studyStreak')) || { count: 0 };
+    const streakCount = streakData.count || 0;
+
+    // 1. IPA hoàn thành
+    const ipaCourse = appState.courses.find(c => c.key === 'ipa');
+    const ipaComplete = ipaCourse ? (ipaCourse.completed >= ipaCourse.total) : false;
+
+    // 2. Giai đoạn 1 hoàn thành
+    const phase1Courses = appState.courses.filter(c => c.phase === 1);
+    const phase1Complete = phase1Courses.length > 0 && phase1Courses.every(c => c.completed >= c.total);
+
+    // 3. Toàn bộ hoàn thành
+    const allComplete = appState.courses.length > 0 && appState.courses.every(c => c.completed >= c.total);
+
+    const unlockedBadges = {
+        ipa_complete: ipaComplete,
+        phase1_complete: phase1Complete,
+        streak_7: streakCount >= 7,
+        streak_30: streakCount >= 30,
+        lessons_100: totalCompleted >= 100,
+        lessons_500: totalCompleted >= 500,
+        all_complete: allComplete
+    };
+
+    grid.innerHTML = '';
+    BADGES.forEach(b => {
+        const isUnlocked = unlockedBadges[b.id];
+        const badgeClass = isUnlocked ? 'unlocked' : 'locked';
+        let style = '';
+        if (isUnlocked) {
+            style = `background: ${b.color}15; color: ${b.color}; border-color: ${b.color}40;`;
+        }
+        
+        const badgeHtml = `
+            <div class="badge-item ${badgeClass}" title="${b.title}: ${b.desc}" style="${style}">
+                <i class="bi ${b.icon}" style="font-size: 1.6rem; margin-bottom: 4px;"></i>
+                <span style="font-size: 0.65rem; font-weight: 600; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${b.title}</span>
+            </div>
+        `;
+        grid.insertAdjacentHTML('beforeend', badgeHtml);
     });
 }
