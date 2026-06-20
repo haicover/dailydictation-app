@@ -618,19 +618,33 @@ function updateCalculations() {
         }
     });
 
-    // 3.7 Ước tính điểm thi
+    // 3.7 Ước tính điểm thi (Dự kiến khoảng điểm nghe thực tế)
     const toeic = appState.courses.find(c => c.key === 'toeic');
     const estToeicEl = document.getElementById('est-toeic');
     if (toeic && estToeicEl) {
-        const score = 110 + Math.round((toeic.completed / toeic.total) * 385);
-        estToeicEl.innerText = `${score} / 495 L`;
+        if (toeic.completed === 0) {
+            estToeicEl.innerText = `-- / 495 L`;
+        } else {
+            const baseScore = 110 + (toeic.completed / toeic.total) * 385;
+            const roundTo5 = (val) => Math.round(val / 5) * 5;
+            const minScore = Math.max(110, roundTo5(baseScore - 20));
+            const maxScore = Math.min(495, roundTo5(baseScore + 20));
+            estToeicEl.innerText = `${minScore} - ${maxScore} / 495 L`;
+        }
     }
 
     const ielts = appState.courses.find(c => c.key === 'ielts');
     const estIeltsEl = document.getElementById('est-ielts');
     if (ielts && estIeltsEl) {
-        const band = (4.0 + (ielts.completed / ielts.total) * 5.0).toFixed(1);
-        estIeltsEl.innerText = `Band ${band} / 9.0 L`;
+        if (ielts.completed === 0) {
+            estIeltsEl.innerText = `-- / 9.0 L`;
+        } else {
+            const baseBand = 4.0 + (ielts.completed / ielts.total) * 5.0;
+            const roundToHalf = (val) => Math.round(val * 2) / 2;
+            const minBand = Math.max(4.0, roundToHalf(baseBand - 0.25)).toFixed(1);
+            const maxBand = Math.min(9.0, roundToHalf(baseBand + 0.25)).toFixed(1);
+            estIeltsEl.innerText = `Band ${minBand} - ${maxBand} / 9.0 L`;
+        }
     }
 
     // 4. Cập nhật gợi ý học tiếp theo
@@ -926,7 +940,102 @@ function initNotesModal() {
 
     if (!modal || !btnClose || !btnCancel || !btnSave || !textarea || !titleSpan) return;
 
-    const closeModal = () => modal.classList.remove('show');
+    // Tạo phần tử bubble dùng chung cho việc tra từ nhanh khi bôi đen
+    let bubble = document.getElementById('dict-bubble');
+    if (!bubble) {
+        bubble = document.createElement('button');
+        bubble.id = 'dict-bubble';
+        bubble.className = 'btn btn-primary btn-sm';
+        bubble.style.cssText = `
+            position: absolute;
+            z-index: 100000;
+            display: none;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+            border-radius: 20px;
+            padding: 6px 14px;
+            font-size: 0.78rem;
+            font-weight: 600;
+            gap: 6px;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            color: #ffffff;
+            cursor: pointer;
+            transition: transform 0.1s ease;
+            font-family: inherit;
+        `;
+        bubble.innerHTML = '<i class="bi bi-search"></i> Tra từ nhanh';
+        document.body.appendChild(bubble);
+    }
+
+    const hideBubble = () => {
+        bubble.style.display = 'none';
+    };
+
+    let lastMouseX = 0;
+    let lastMouseY = 0;
+    let selectedWord = '';
+
+    textarea.addEventListener('mouseup', (e) => {
+        lastMouseX = e.pageX;
+        lastMouseY = e.pageY;
+        
+        setTimeout(() => {
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+            if (start !== undefined && end !== undefined && end > start) {
+                const text = textarea.value.substring(start, end).trim();
+                const cleanWord = text.replace(/^[^a-zA-Z]+|[^a-zA-Z]+$/g, '');
+                if (cleanWord && !cleanWord.includes(' ') && cleanWord.length >= 2 && cleanWord.length <= 30) {
+                    selectedWord = cleanWord;
+                    bubble.style.left = `${lastMouseX - 40}px`;
+                    bubble.style.top = `${lastMouseY - 45}px`;
+                    bubble.style.display = 'inline-flex';
+                    return;
+                }
+            }
+            hideBubble();
+        }, 10);
+    });
+
+    textarea.addEventListener('keyup', () => {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        if (start === end) {
+            hideBubble();
+        }
+    });
+
+    bubble.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        if (selectedWord) {
+            const dictTabBtn = document.querySelector('.tab-btn[data-tab="tab-dict"]');
+            if (dictTabBtn) {
+                dictTabBtn.click();
+            }
+            
+            const dictInput = document.getElementById('dict-search-input');
+            const btnDictSearch = document.getElementById('btn-dict-search');
+            if (dictInput && btnDictSearch) {
+                dictInput.value = selectedWord;
+                btnDictSearch.click();
+            }
+        }
+        hideBubble();
+    });
+
+    document.addEventListener('mousedown', (e) => {
+        if (e.target !== bubble && !bubble.contains(e.target) && e.target !== textarea) {
+            hideBubble();
+        }
+    });
+
+    const closeModal = () => {
+        modal.classList.remove('show');
+        hideBubble();
+    };
 
     btnClose.addEventListener('click', closeModal);
     btnCancel.addEventListener('click', closeModal);
